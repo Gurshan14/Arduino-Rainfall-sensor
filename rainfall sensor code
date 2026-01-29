@@ -1,0 +1,122 @@
+/*
+* Made by Gurshan Singh, Alonzo Mayuga
+*
+* green > no rain
+* yellow > light rain
+* red > heavy rain
+*/
+
+#include <Arduino.h>
+constexpr uint8_t RAIN_SENSOR_PIN = A0;
+
+constexpr uint8_t LED_GREEN = 3;
+constexpr uint8_t LED_YELLOW = 4;
+constexpr uint8_t LED_RED = 5;
+
+// Rain Thresholds (calibrate them please)
+// 900-1023 >> dry
+// 600-850 >> light or drizzle
+// 300-600 >> moderate
+// 0-350 >> heavy or when water is actually on the sensor
+//
+constexpr uint8_t THRESHOLD_DRY = 820;
+constexpr uint8_t THRESHOLD_LIGHT = 580;
+constexpr uint8_t THRESHOLD_HEAVY = 320;
+
+enum RainLevel { NONE, LIGHT, HEAVY };
+// THE GLOBAL VARIABLES REALLY NEEDED DONT MESS WITH IT
+int lastRainValue = -1;
+
+void setup() {
+  Serial.begin(115200);
+  while (!Serial) { delay(1); }
+
+  pinMode(LED_GREEN, OUTPUT);
+  pinMode(LED_YELLOW, OUTPUT);
+  pinMode(LED_RED, OUTPUT);
+
+  Serial.println(F("Rain Intensity Monitor has Started.."));
+  Serial.println(F("Thresholds:"));
+  Serial.print(F(" Dry  > "));
+  Serial.println(THRESHOLD_DRY);
+  Serial.print(F("  Light > "));
+  Serial.println(THRESHOLD_LIGHT);
+  Serial.println(F("  Heavy ≤ 320 (example)"));
+  Serial.println();
+}
+
+void loop() {
+  int raw = analogRead(RAIN_SENSOR_PIN);
+
+  int rain = smoothReading(raw);
+
+  if (abs(rain - lastRainValue) >= 8) {
+    lastRainValue = rain;
+
+    RainLevel level = getRainLevel(rain);
+
+    updateLeds(level);
+
+    printStatus(rain, level);
+  }
+
+  delay(350);
+}
+
+void turnAllLedsOff() {
+  digitalWrite(LED_GREEN, LOW);
+  digitalWrite(LED_YELLOW, LOW);
+  digitalWrite(LED_RED, LOW);
+}
+
+RainLevel getRainLevel(int value) {
+  if (value > THRESHOLD_DRY) {
+    return NONE;
+  }
+  if (value > THRESHOLD_LIGHT) {
+    return LIGHT;
+  }
+  return HEAVY;
+}
+
+void updateLeds(RainLevel level) {
+  turnAllLedsOff();
+
+  switch (level) {
+    case NONE:
+      digitalWrite(LED_GREEN, HIGH);
+      break;
+    case LIGHT:
+      digitalWrite(LED_YELLOW, HIGH);
+      break;
+    case HEAVY:
+      digitalWrite(LED_RED, HIGH);
+      break;
+  }
+}
+
+void printStatus(int value, RainLevel level) {
+  Serial.print(F("Rain:"));
+  Serial.print(value);
+  Serial.print(F(" → "));
+
+  switch (level) {
+    case NONE:
+      Serial.println(F("Dry"));
+      break;
+    case LIGHT:
+      Serial.println(F("Light"));
+      break;
+    case HEAVY:
+      Serial.println(F("Heavy"));
+      break;
+  }
+}
+
+int smoothReading(int newValue) {
+  static float previous = 512.0f;  // start somewhere in the middle, now float for precision
+  constexpr float alpha = 0.65f;  // 0.0 no smoothing, 1.0 almost no change
+
+  previous = previous * alpha + newValue * (1.0f - alpha);
+  return (int)previous;  // Cast back to int
+}
